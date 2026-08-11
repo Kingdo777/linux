@@ -4652,6 +4652,33 @@ static int memory_peak_show(struct seq_file *sf, void *v)
 	return peak_show(sf, v, &memcg->memory);
 }
 
+static int memory_page_count_peak_show(struct seq_file *sf, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(seq_css(sf));
+	long cur, peak;
+
+	/* Pull per-cpu deltas into the aggregated vmstats state first. */
+	mem_cgroup_flush_stats(memcg);
+
+	cur = memcg_page_state(memcg, NR_ANON_MAPPED);
+	if (cur < 0)
+		cur = 0;
+
+	/*
+	 * Lazily update anon_pages_peak to the max of itself and the
+	 * current hierarchical NR_ANON_MAPPED count. Monotonically
+	 * non-decreasing; no reset path.
+	 */
+	do {
+		peak = atomic_long_read(&memcg->anon_pages_peak);
+		if (cur <= peak)
+			break;
+	} while (!atomic_long_try_cmpxchg(&memcg->anon_pages_peak, &peak, cur));
+
+	seq_printf(sf, "%ld\n", peak);
+	return 0;
+}
+
 static int peak_open(struct kernfs_open_file *of)
 {
 	struct cgroup_of_peak *ofp = of_peak(of);
@@ -5012,6 +5039,11 @@ static struct cftype memory_files[] = {
 		.release = peak_release,
 		.seq_show = memory_peak_show,
 		.write = memory_peak_write,
+	},
+	{
+		.name = "page_count_peak",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_page_count_peak_show,
 	},
 	{
 		.name = "min",
