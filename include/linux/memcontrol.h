@@ -255,6 +255,14 @@ struct mem_cgroup {
 	atomic_long_t		memory_events[MEMCG_NR_MEMORY_EVENTS];
 	atomic_long_t		memory_events_local[MEMCG_NR_MEMORY_EVENTS];
 
+	/*
+	 * Historical peak of the NR_ANON_MAPPED page count (hierarchical:
+	 * this memcg plus all descendants). Updated lazily from the read
+	 * path of memory.page_count_peak; monotonically non-decreasing
+	 * over the memcg's lifetime and zero-initialized at allocation.
+	 */
+	atomic_long_t		anon_pages_peak;
+
 #ifdef CONFIG_MEMCG_NMI_SAFETY_REQUIRES_ATOMIC
 	/* MEMCG_KMEM for nmi context */
 	atomic_t		kmem_stat;

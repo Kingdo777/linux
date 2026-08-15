@@ -1447,6 +1447,25 @@ The following nested keys are defined.
 	current memory usage for subsequent reads through the same
 	file descriptor.
 
+  memory.page_count_peak
+	A read-only file which exists on non-root cgroups. The value is
+	expressed in pages (it is not multiplied by PAGE_SIZE).
+
+	It shows the historical maximum of the anonymous page
+	(NR_ANON_MAPPED) count, aggregated hierarchically across the
+	cgroup and all of its descendants, as exposed by the "anon"
+	line of memory.stat.
+
+	The peak is updated lazily on read and cannot be reset: writes
+	(such as "echo 0 > memory.page_count_peak") fail with -EACCES,
+	and the value is monotonically non-decreasing over the cgroup's
+	lifetime.
+
+	The value is best-effort. It is updated only when this file is
+	read (which first flushes the rstat tree), so transient peaks
+	that occur between reads, or that are not covered by an rstat
+	flush triggered by another reader, may be missed.
+
   memory.oom.group
 	A read-write single value file which exists on non-root
 	cgroups.  The default value is "0".
