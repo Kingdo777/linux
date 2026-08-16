@@ -1437,6 +1437,17 @@ The following nested keys are defined.
 	The valid range for swappiness is [0-200, max], setting
 	swappiness=max exclusively reclaims anonymous memory.
 
+  memory.max_usage_in_pages
+	A read-only single value file which exists on non-root cgroups.
+
+	The global historical maximum memory usage of the cgroup and its
+	descendants, reported as an unsigned decimal number of pages followed by
+	a newline.  The file cannot be reset and reads through all file
+	descriptors observe the same global maximum.
+
+	Unlike memory.peak, this file reports pages instead of bytes and has no
+	write-to-reset or per-file-descriptor peak semantics.
+
   memory.peak
 	A read-write single value file which exists on non-root cgroups.
 

@@ -75,6 +75,7 @@ Brief summary of control files.
  memory.failcnt			     show the number of memory usage hits limits
  memory.memsw.failcnt		     show the number of memory+Swap hits limits
  memory.max_usage_in_bytes	     show max memory usage recorded
+ memory.max_usage_in_pages	     show the global max memory usage in pages
  memory.memsw.max_usage_in_bytes     show max memory+Swap usage recorded
  memory.soft_limit_in_bytes	     set/show soft limit of memory usage
 				     This knob is not available on CONFIG_PREEMPT_RT systems.
@@ -650,7 +651,16 @@ value for efficient access. (Of course, when necessary, it's synchronized.)
 If you want to know more exact memory usage, you should use RSS+CACHE(+SWAP)
 value in memory.stat(see 5.2).
 
-5.6 numa_stat
+5.6 max_usage_in_pages
+----------------------
+
+``memory.max_usage_in_pages`` reports the memory page counter's global
+historical maximum as an unsigned decimal number of pages followed by a
+newline.  The file is read-only and cannot itself reset the maximum.  Unlike
+``memory.max_usage_in_bytes``, it does not convert the value to bytes and does
+not provide that file's write-to-reset behavior.
+
+5.7 numa_stat
 -------------
 
 This is similar to numa_maps but operates on a per-memcg basis.  This is
