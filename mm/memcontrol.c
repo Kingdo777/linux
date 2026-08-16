@@ -4628,6 +4628,14 @@ static u64 memory_current_read(struct cgroup_subsys_state *css,
 	return (u64)page_counter_read(&memcg->memory) * PAGE_SIZE;
 }
 
+static u64 memory_max_usage_in_pages_read(struct cgroup_subsys_state *css,
+					  struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return (u64)READ_ONCE(memcg->memory.watermark);
+}
+
 #define OFP_PEAK_UNSET (((-1UL)))
 
 static int peak_show(struct seq_file *sf, void *v, struct page_counter *pc)
@@ -5012,6 +5020,11 @@ static struct cftype memory_files[] = {
 		.release = peak_release,
 		.seq_show = memory_peak_show,
 		.write = memory_peak_write,
+	},
+	{
+		.name = "max_usage_in_pages",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memory_max_usage_in_pages_read,
 	},
 	{
 		.name = "min",
