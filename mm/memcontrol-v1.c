@@ -2065,6 +2065,15 @@ static int mem_cgroup_slab_show(struct seq_file *m, void *p)
 }
 #endif
 
+static int mem_cgroup_max_usage_in_pages_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+
+	seq_printf(m, "%llu\n", (u64)READ_ONCE(memcg->memory.watermark));
+
+	return 0;
+}
+
 struct cftype mem_cgroup_legacy_files[] = {
 	{
 		.name = "usage_in_bytes",
@@ -2076,6 +2085,10 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.private = MEMFILE_PRIVATE(_MEM, RES_MAX_USAGE),
 		.write = mem_cgroup_reset,
 		.read_u64 = mem_cgroup_read_u64,
+	},
+	{
+		.name = "max_usage_in_pages",
+		.seq_show = mem_cgroup_max_usage_in_pages_show,
 	},
 	{
 		.name = "limit_in_bytes",

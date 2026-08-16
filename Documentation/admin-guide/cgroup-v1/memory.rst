@@ -75,6 +75,13 @@ Brief summary of control files.
  memory.failcnt			     show the number of memory usage hits limits
  memory.memsw.failcnt		     show the number of memory+Swap hits limits
  memory.max_usage_in_bytes	     show max memory usage recorded
+ memory.max_usage_in_pages	     show max memory usage recorded in pages.
+				     Read-only; the file itself cannot be written
+				     to or reset and does not register
+				     event_control. Its value reflects the same
+				     watermark as memory.max_usage_in_bytes and
+				     changes indirectly when the latter is reset
+				     through its existing reset path.
  memory.memsw.max_usage_in_bytes     show max memory+Swap usage recorded
  memory.soft_limit_in_bytes	     set/show soft limit of memory usage
 				     This knob is not available on CONFIG_PREEMPT_RT systems.
