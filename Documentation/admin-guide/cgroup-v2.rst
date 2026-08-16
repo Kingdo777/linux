@@ -1447,6 +1447,16 @@ The following nested keys are defined.
 	current memory usage for subsequent reads through the same
 	file descriptor.
 
+  memory.max_usage_in_pages
+	A read-only single value file which exists on non-root cgroups.
+
+	The max memory usage recorded for the cgroup and its descendants
+	since the creation of the cgroup, in pages.
+
+	The value is global to the cgroup and cannot be reset: it is not
+	affected by writes to memory.peak and does not change across file
+	descriptors.
+
   memory.oom.group
 	A read-write single value file which exists on non-root
 	cgroups.  The default value is "0".
