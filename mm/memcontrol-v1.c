@@ -1632,6 +1632,19 @@ static u64 mem_cgroup_read_u64(struct cgroup_subsys_state *css,
 	}
 }
 
+static u64 memcg1_max_usage_in_pages_read_u64(struct cgroup_subsys_state *css,
+					      struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	/*
+	 * Report the all-time high of the memory usage in pages.  This file
+	 * has no write path of its own; the watermark it reports is shared
+	 * with max_usage_in_bytes, whose reset drops the reported value.
+	 */
+	return (u64)READ_ONCE(memcg->memory.watermark);
+}
+
 /*
  * This function doesn't do anything useful. Its only job is to provide a read
  * handler for a file so that cgroup_file_mode() will add read permissions.
@@ -2076,6 +2089,10 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.private = MEMFILE_PRIVATE(_MEM, RES_MAX_USAGE),
 		.write = mem_cgroup_reset,
 		.read_u64 = mem_cgroup_read_u64,
+	},
+	{
+		.name = "max_usage_in_pages",
+		.read_u64 = memcg1_max_usage_in_pages_read_u64,
 	},
 	{
 		.name = "limit_in_bytes",
