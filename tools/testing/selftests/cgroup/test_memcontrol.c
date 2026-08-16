@@ -251,6 +251,92 @@ cleanup:
 	return ret;
 }
 
+static int read_max_usage_in_pages(const char *cgroup, unsigned long long *pages)
+{
+	char buf[128], *end;
+	size_t len, i;
+	int ret;
+
+	ret = cg_read(cgroup, "memory.max_usage_in_pages", buf, sizeof(buf));
+	if (ret)
+		return ret;
+
+	len = strlen(buf);
+	if (len < 2 || buf[len - 1] != '\n')
+		return -EINVAL;
+
+	for (i = 0; i < len - 1; i++)
+		if (buf[i] < '0' || buf[i] > '9')
+			return -EINVAL;
+
+	errno = 0;
+	*pages = strtoull(buf, &end, 10);
+	if (errno || end != buf + len - 1)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int test_memcg_max_usage_in_pages(const char *root)
+{
+	const char file[] = "memory.max_usage_in_pages";
+	unsigned long long pages, pages_after;
+	long peak;
+	char *memcg;
+	int fd, read_ret, ret = KSFT_FAIL;
+
+	memcg = cg_name(root, "memcg_max_usage_in_pages");
+	if (!memcg)
+		return ret;
+
+	if (cg_create(memcg))
+		goto cleanup;
+
+	read_ret = read_max_usage_in_pages(memcg, &pages);
+	if (read_ret) {
+		if (read_ret == -ENOENT)
+			ret = KSFT_SKIP;
+		goto cleanup;
+	}
+
+	if (cg_run(memcg, alloc_anon_50M_check, NULL))
+		goto cleanup;
+
+	if (read_max_usage_in_pages(memcg, &pages))
+		goto cleanup;
+
+	if (!pages)
+		goto cleanup;
+
+	peak = cg_read_long(memcg, "memory.peak");
+	if (peak < 0 || peak != pages * page_size)
+		goto cleanup;
+
+	if (read_max_usage_in_pages(memcg, &pages_after) ||
+	    pages_after != pages)
+		goto cleanup;
+
+	fd = cg_open(memcg, file, O_WRONLY | O_CLOEXEC);
+	if (fd >= 0) {
+		if (write(fd, "reset\n", 6) >= 0) {
+			close(fd);
+			goto cleanup;
+		}
+		close(fd);
+	}
+
+	if (read_max_usage_in_pages(memcg, &pages_after) ||
+	    pages_after != pages)
+		goto cleanup;
+
+	ret = KSFT_PASS;
+
+cleanup:
+	cg_destroy(memcg);
+	free(memcg);
+	return ret;
+}
+
 /*
  * This test create a memory cgroup, allocates
  * some anonymous memory and some pagecache
@@ -1770,6 +1856,7 @@ struct memcg_test {
 	const char *name;
 } tests[] = {
 	T(test_memcg_subtree_control),
+	T(test_memcg_max_usage_in_pages),
 	T(test_memcg_current_peak),
 	T(test_memcg_min),
 	T(test_memcg_low),
