@@ -277,6 +277,12 @@ static int read_max_usage_in_pages(const char *cgroup, unsigned long long *pages
 	return 0;
 }
 
+static bool is_read_only_rejection(int err)
+{
+	/* Rejection may happen in inode permissions, kernfs, or cgroup core. */
+	return err == EACCES || err == EPERM || err == EROFS || err == EINVAL;
+}
+
 static int test_memcg_max_usage_in_pages(const char *root)
 {
 	const char file[] = "memory.max_usage_in_pages";
@@ -317,8 +323,12 @@ static int test_memcg_max_usage_in_pages(const char *root)
 		goto cleanup;
 
 	fd = cg_open(memcg, file, O_WRONLY | O_CLOEXEC);
-	if (fd >= 0) {
-		if (write(fd, "reset\n", 6) >= 0) {
+	if (fd < 0) {
+		if (!is_read_only_rejection(errno))
+			goto cleanup;
+	} else {
+		if (write(fd, "reset\n", 6) >= 0 ||
+		    !is_read_only_rejection(errno)) {
 			close(fd);
 			goto cleanup;
 		}
