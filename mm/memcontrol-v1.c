@@ -1642,6 +1642,14 @@ static int mem_cgroup_dummy_seq_show(__always_unused struct seq_file *m,
 	return -EINVAL;
 }
 
+static u64 memory_max_usage_in_pages_read(struct cgroup_subsys_state *css,
+					  struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return (u64)READ_ONCE(memcg->memory.watermark);
+}
+
 static int memcg_update_tcp_max(struct mem_cgroup *memcg, unsigned long max)
 {
 	int ret;
@@ -2076,6 +2084,10 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.private = MEMFILE_PRIVATE(_MEM, RES_MAX_USAGE),
 		.write = mem_cgroup_reset,
 		.read_u64 = mem_cgroup_read_u64,
+	},
+	{
+		.name = "max_usage_in_pages",
+		.read_u64 = memory_max_usage_in_pages_read,
 	},
 	{
 		.name = "limit_in_bytes",
