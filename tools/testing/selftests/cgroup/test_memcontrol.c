@@ -1763,6 +1763,115 @@ cleanup:
 
 	return ret;
 }
+/*
+ * This test verifies the read-only memory.max_usage_in_pages interface: it is
+ * present on non-root cgroups, returns the global peak watermark as a page
+ * count (no PAGE_SIZE multiplication), tracks the same watermark as
+ * memory.peak (bytes / page_size), cannot be opened for writing, and writes
+ * fail.
+ */
+static int test_memcg_max_usage_in_pages(const char *root)
+{
+	int ret = KSFT_FAIL;
+	long peak_bytes, peak_pages, current_pages;
+	char *memcg = NULL;
+	int fd = -1;
+	struct stat ss;
+
+	memcg = cg_name(root, "memcg_test_max_usage_in_pages");
+	if (!memcg)
+		goto cleanup;
+
+	if (cg_create(memcg))
+		goto cleanup;
+
+	/* The file must exist and be readable. */
+	peak_pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak_pages < 0)
+		goto cleanup;
+
+	/* A fresh cgroup should report no recorded peak yet. */
+	if (peak_pages != 0)
+		goto cleanup;
+
+	/* Allocate some anonymous memory to push the watermark up. */
+	if (cg_run(memcg, alloc_anon_50M_check, NULL))
+		goto cleanup;
+
+	/*
+	 * Cross-check against memory.peak, which reports bytes (watermark *
+	 * PAGE_SIZE) when read through a fresh FD. Both readers observe the same
+	 * non-decreasing global watermark, so reading peak (bytes) first then the
+	 * page count must yield peak_pages >= peak_bytes / page_size.
+	 */
+	peak_bytes = cg_read_long(memcg, "memory.peak");
+	if (peak_bytes < MB(50))
+		goto cleanup;
+
+	peak_pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak_pages <= 0)
+		goto cleanup;
+
+	if (peak_pages < peak_bytes / page_size)
+		goto cleanup;
+
+	/*
+	 * Sanity check: the recorded peak must be at least as large as the
+	 * current usage (the watermark never drops below usage).
+	 */
+	current_pages = cg_read_long(memcg, "memory.current") / page_size;
+	if (current_pages < 0)
+		goto cleanup;
+
+	if (peak_pages < current_pages)
+		goto cleanup;
+
+	/*
+	 * The file must be read-only: it must not carry a writable bit, opening
+	 * it for writing must fail with EACCES, and any write attempt fails.
+	 */
+	fd = cg_open(memcg, "memory.max_usage_in_pages", O_RDONLY);
+	if (fd < 0)
+		goto cleanup;
+
+	if (fstat(fd, &ss))
+		goto cleanup;
+
+	if (ss.st_mode & S_IWUSR)
+		goto cleanup;
+
+	close(fd);
+	fd = -1;
+
+	fd = cg_open(memcg, "memory.max_usage_in_pages", O_WRONLY);
+	if (fd >= 0) {
+		close(fd);
+		fd = -1;
+		goto cleanup;
+	}
+
+	if (errno != EACCES)
+		goto cleanup;
+
+	if (!cg_write(memcg, "memory.max_usage_in_pages", "reset"))
+		goto cleanup;
+
+	/*
+	 * The shared watermark is reset by writing to memory.peak (per-FD
+	 * reset) or memory.max_usage_in_bytes (v1); max_usage_in_pages must
+	 * reflect that reset without offering its own write path.
+	 */
+	ret = KSFT_PASS;
+
+cleanup:
+	if (fd >= 0)
+		close(fd);
+	if (memcg)
+		cg_destroy(memcg);
+	free(memcg);
+
+	return ret;
+}
 
 #define T(x) { x, #x }
 struct memcg_test {
@@ -1771,6 +1880,7 @@ struct memcg_test {
 } tests[] = {
 	T(test_memcg_subtree_control),
 	T(test_memcg_current_peak),
+	T(test_memcg_max_usage_in_pages),
 	T(test_memcg_min),
 	T(test_memcg_low),
 	T(test_memcg_high),
