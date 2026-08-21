@@ -893,7 +893,7 @@ config BHYVE_GUEST
 	help
 	  This option allows to run Linux to recognise when it is running as a
 	  guest in the Bhyve hypervisor, and to support more than 255 vCPUs when
-	  when doing so. More details about Bhyve can be found at https://bhyve.org
+	  doing so. More details about Bhyve can be found at https://bhyve.org
 	  and https://wiki.freebsd.org/bhyve/.
 
 config INTEL_TDX_GUEST
