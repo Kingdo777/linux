@@ -893,7 +893,7 @@ config BHYVE_GUEST
 	depends on X86_64
 	help
 	  This option allows to run Linux to recognise when it is running as a
-	  guest in the Bhyve hypervisor, and to support more than 255 vCPUs when
+	  guest in the Bhyve hypervisor, and to support more than 255 vCPUs
 	  when doing so. More details about Bhyve can be found at https://bhyve.org
 	  and https://wiki.freebsd.org/bhyve/.
 
@@ -909,7 +909,7 @@ config INTEL_TDX_GUEST
 	select UNACCEPTED_MEMORY
 	help
 	  Support running as a guest under Intel TDX.  Without this support,
-	  the guest kernel can not boot or run under TDX.
+	  the guest kernel cannot boot or run under TDX.
 	  TDX includes memory encryption and integrity capabilities
 	  which protect the confidentiality and integrity of guest
 	  memory contents and CPU state. TDX guests are protected from
