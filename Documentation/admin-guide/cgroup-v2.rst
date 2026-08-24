@@ -1473,12 +1473,13 @@ The following nested keys are defined.
 	cgroups.
 
 	The maximal memory usage recorded for the cgroup and its
-	descendants since the creation of the cgroup.
+	descendants, in pages, since the most recent watermark reset
+	on the cgroup's memory page_counter.
 
-	Unlike memory.peak, this value is the global watermark in
-	pages (not bytes) and cannot be reset: it reflects the
-	historical peak since the cgroup was created, regardless of
-	any per-FD resets on memory.peak.
+	This file has no per-FD semantics and cannot be written.
+	It reports the same global watermark that backs
+	memory.peak's global (non-reset) reads; a write to a v1
+	memory.max_usage_in_bytes file on the same cgroup resets it.
 
   memory.oom.group
 	A read-write single value file which exists on non-root

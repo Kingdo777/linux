@@ -77,11 +77,12 @@ Brief summary of control files.
  memory.max_usage_in_bytes	     show max memory usage recorded
  memory.memsw.max_usage_in_bytes     show max memory+Swap usage recorded
  memory.max_usage_in_pages	     show max memory usage recorded in
-					     pages (read-only; the global
-					     historical peak since the
-					     cgroup creation, which cannot
-					     be reset unlike
-					     memory.max_usage_in_bytes)
+					     pages (read-only; reads the
+					     same page_counter global
+					     watermark as
+					     memory.max_usage_in_bytes,
+					     so it is reset by writing
+					     to memory.max_usage_in_bytes)
  memory.soft_limit_in_bytes	     set/show soft limit of memory usage
 				     This knob is not available on CONFIG_PREEMPT_RT systems.
                                      This knob is deprecated and shouldn't be
