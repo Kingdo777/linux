@@ -1468,6 +1468,19 @@ The following nested keys are defined.
 	current memory usage for subsequent reads through the same
 	file descriptor.
 
+  memory.max_usage_in_pages
+	A read-only single value file which exists on non-root
+	cgroups.
+
+	The maximal memory usage recorded for the cgroup and its
+	descendants, in pages, since the most recent watermark reset
+	on the cgroup's memory page_counter.
+
+	This file has no per-FD semantics and cannot be written.
+	It reports the same global watermark that backs
+	memory.peak's global (non-reset) reads; a write to a v1
+	memory.max_usage_in_bytes file on the same cgroup resets it.
+
   memory.oom.group
 	A read-write single value file which exists on non-root
 	cgroups.  The default value is "0".
