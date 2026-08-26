@@ -1764,6 +1764,118 @@ cleanup:
 	return ret;
 }
 
+static int alloc_anon_50M_v1_check(const char *cgroup, void *arg)
+{
+	size_t size = MB(50);
+	char *buf;
+	long usage;
+	int ret = -1;
+
+	buf = alloc_and_populate_anon(size);
+	if (!buf)
+		return -1;
+
+	usage = cg_read_long(cgroup, "memory.usage_in_bytes");
+	if (usage < size)
+		goto cleanup;
+
+	if (!values_close(size, usage, 3))
+		goto cleanup;
+
+	ret = 0;
+cleanup:
+	free(buf);
+	return ret;
+}
+
+/*
+ * This test verifies that the read-only memory.max_usage_in_pages file is
+ * present on both cgroup v1 (legacy) and cgroup v2, reports the historical
+ * peak memory usage in page units (i.e. the byte-oriented interface divided
+ * by PAGE_SIZE), rejects writes, and is not reset by a failed write.
+ */
+static int test_memcg_max_usage_in_pages(const char *root)
+{
+	char v1_root[PATH_MAX];
+	int ret = KSFT_FAIL;
+	char *memcg, *v1_memcg = NULL;
+	long peak_bytes, peak_pages, peak_bytes_after;
+
+	memcg = cg_name(root, "memcg_test");
+	if (!memcg)
+		goto cleanup;
+
+	if (cg_create(memcg))
+		goto cleanup;
+
+	if (cg_run(memcg, alloc_anon_50M_check, NULL))
+		goto cleanup;
+
+	/* cgroup v2 interface */
+	peak_bytes = cg_read_long(memcg, "memory.peak");
+	peak_pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak_bytes < 0 || peak_pages < 0)
+		goto cleanup;
+
+	/* pages interface must track the byte interface within a PAGE_SIZE factor */
+	if (peak_bytes < MB(50))
+		goto cleanup;
+	if (!values_close(peak_bytes, peak_pages * page_size, 5))
+		goto cleanup;
+
+	/* the file must reject writes; a failed write must not change the peak */
+	if (!cg_write(memcg, "memory.max_usage_in_pages", "reset"))
+		goto cleanup;
+
+	peak_bytes_after = cg_read_long(memcg, "memory.peak");
+	if (peak_bytes_after < 0)
+		goto cleanup;
+	if (peak_bytes_after < peak_bytes)
+		goto cleanup;
+
+	/*
+	 * cgroup v1 legacy interface: only exercised when a v1 memory hierarchy
+	 * is mounted. The v2 root path is a cgroup2 mount, so a separate lookup
+	 * for the "memory" controller is required.
+	 */
+	if (!cg_find_controller_root(v1_root, sizeof(v1_root), "memory")) {
+		v1_memcg = cg_name(v1_root, "memcg_test_v1");
+		if (!v1_memcg)
+			goto cleanup;
+
+		if (cg_create(v1_memcg))
+			goto cleanup;
+
+		if (cg_run(v1_memcg, alloc_anon_50M_v1_check, NULL))
+			goto cleanup;
+
+		peak_bytes = cg_read_long(v1_memcg, "memory.max_usage_in_bytes");
+		peak_pages = cg_read_long(v1_memcg, "memory.max_usage_in_pages");
+		if (peak_bytes < 0 || peak_pages < 0)
+			goto cleanup;
+
+		if (peak_bytes < MB(50))
+			goto cleanup;
+		if (!values_close(peak_bytes, peak_pages * page_size, 5))
+			goto cleanup;
+
+		if (!cg_write(v1_memcg, "memory.max_usage_in_pages", "reset"))
+			goto cleanup;
+	}
+
+	ret = KSFT_PASS;
+
+cleanup:
+	if (v1_memcg) {
+		cg_destroy(v1_memcg);
+		free(v1_memcg);
+	}
+	cg_destroy(memcg);
+	free(memcg);
+
+	return ret;
+}
+
 #define T(x) { x, #x }
 struct memcg_test {
 	int (*fn)(const char *root);
@@ -1785,6 +1897,7 @@ struct memcg_test {
 	T(test_memcg_oom_group_score_events),
 	T(test_memcg_inotify_delete_file),
 	T(test_memcg_inotify_delete_dir),
+	T(test_memcg_max_usage_in_pages),
 };
 #undef T
 
