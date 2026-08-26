@@ -120,6 +120,7 @@ to reStructuredText format, or are simply too old.
    :caption: Other documentation
 
    Unsorted documentation <staging/index>
+   NVWA E2E review discussion <nvwa-e2e-review-discussion>
 
 
 Translations
