@@ -400,6 +400,53 @@ cleanup:
 	return ret;
 }
 
+/*
+ * This test creates a memory cgroup, allocates some anonymous memory,
+ * and checks that memory.max_usage_in_pages reports the historical
+ * watermark in pages (not bytes) and cannot be written to.
+ */
+static int test_memcg_max_usage_in_pages(const char *root)
+{
+	int ret = KSFT_FAIL;
+	long pages, peak;
+	char *memcg;
+
+	memcg = cg_name(root, "memcg_test_max_usage_in_pages");
+	if (!memcg)
+		goto cleanup;
+
+	if (cg_create(memcg))
+		goto cleanup;
+
+	pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (pages != 0)
+		goto cleanup;
+
+	if (cg_run(memcg, alloc_anon, (void *)MB(50)))
+		goto cleanup;
+
+	pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (pages < MB(50) / page_size)
+		goto cleanup;
+
+	/* The value must match the global watermark reported by memory.peak. */
+	peak = cg_read_long(memcg, "memory.peak");
+	if (pages != peak / page_size)
+		goto cleanup;
+
+	/* The file is read-only: writes must fail. */
+	if (cg_write(memcg, "memory.max_usage_in_pages", "0") != -1)
+		goto cleanup;
+
+	ret = KSFT_PASS;
+
+cleanup:
+	cg_destroy(memcg);
+	free(memcg);
+
+	return ret;
+}
+
 static int alloc_pagecache_50M_noexit(const char *cgroup, void *arg)
 {
 	int fd = (long)arg;
@@ -1771,6 +1818,7 @@ struct memcg_test {
 } tests[] = {
 	T(test_memcg_subtree_control),
 	T(test_memcg_current_peak),
+	T(test_memcg_max_usage_in_pages),
 	T(test_memcg_min),
 	T(test_memcg_low),
 	T(test_memcg_high),

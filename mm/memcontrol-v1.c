@@ -1931,6 +1931,14 @@ static u64 mem_cgroup_read_u64(struct cgroup_subsys_state *css,
 	}
 }
 
+static u64 mem_cgroup_max_usage_in_pages_read(struct cgroup_subsys_state *css,
+					      struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return (u64)memcg->memory.watermark;
+}
+
 /*
  * This function doesn't do anything useful. Its only job is to provide a read
  * handler for a file so that cgroup_file_mode() will add read permissions.
@@ -2375,6 +2383,10 @@ struct cftype mem_cgroup_legacy_files[] = {
 		.private = MEMFILE_PRIVATE(_MEM, RES_MAX_USAGE),
 		.write = mem_cgroup_reset,
 		.read_u64 = mem_cgroup_read_u64,
+	},
+	{
+		.name = "max_usage_in_pages",
+		.read_u64 = mem_cgroup_max_usage_in_pages_read,
 	},
 	{
 		.name = "limit_in_bytes",
