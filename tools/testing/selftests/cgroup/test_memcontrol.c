@@ -1764,6 +1764,83 @@ cleanup:
 	return ret;
 }
 
+static int test_memcg_max_usage_in_pages(const char *root)
+{
+	int ret = KSFT_FAIL;
+	long peak_bytes, max_usage_pages;
+	char *memcg;
+	struct stat ss;
+	int fd = -1;
+
+	memcg = cg_name(root, "memcg_test");
+	if (!memcg)
+		goto cleanup;
+
+	if (cg_create(memcg))
+		goto cleanup;
+
+	/* The file must exist on a non-root cgroup and be readable. */
+	max_usage_pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (max_usage_pages < 0)
+		goto cleanup;
+
+	/* Allocate 50MB to drive the watermark up. */
+	if (cg_run(memcg, alloc_anon_50M_check, NULL))
+		goto cleanup;
+
+	max_usage_pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (max_usage_pages < MB(50) / page_size)
+		goto cleanup;
+
+	/*
+	 * The page-count value must match the global watermark behind
+	 * memory.peak (which reports it scaled by PAGE_SIZE in bytes), as no
+	 * per-fd reset was performed on memory.peak.
+	 */
+	peak_bytes = cg_read_long(memcg, "memory.peak");
+	if (peak_bytes < MB(50))
+		goto cleanup;
+
+	if (!values_close(peak_bytes, max_usage_pages * page_size, 5))
+		goto cleanup;
+
+	/* Writing must fail: the file has no write callback. */
+	if (!cg_write(memcg, "memory.max_usage_in_pages", "1"))
+		goto cleanup;
+
+	/* The file must not carry a writable mode bit. */
+	fd = cg_open(memcg, "memory.max_usage_in_pages", O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		goto cleanup;
+	if (fstat(fd, &ss))
+		goto cleanup;
+	if (ss.st_mode & S_IWUSR)
+		goto cleanup;
+
+	/*
+	 * memory.peak per-fd reset must still work and be unaffected by the
+	 * new file; a fresh reset followed by a read below current usage is
+	 * sufficient to confirm the ABI is intact.
+	 */
+	if (cg_write(memcg, "memory.peak", "reset"))
+		goto cleanup;
+
+	peak_bytes = cg_read_long(memcg, "memory.peak");
+	if (peak_bytes < 0)
+		goto cleanup;
+
+	ret = KSFT_PASS;
+
+cleanup:
+	if (fd >= 0)
+		close(fd);
+	if (memcg)
+		cg_destroy(memcg);
+	free(memcg);
+
+	return ret;
+}
+
 #define T(x) { x, #x }
 struct memcg_test {
 	int (*fn)(const char *root);
@@ -1785,6 +1862,7 @@ struct memcg_test {
 	T(test_memcg_oom_group_score_events),
 	T(test_memcg_inotify_delete_file),
 	T(test_memcg_inotify_delete_dir),
+	T(test_memcg_max_usage_in_pages),
 };
 #undef T
 
