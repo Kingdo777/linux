@@ -909,7 +909,7 @@ config INTEL_TDX_GUEST
 	select UNACCEPTED_MEMORY
 	help
 	  Support running as a guest under Intel TDX.  Without this support,
-	  the guest kernel can not boot or run under TDX.
+	  the guest kernel cannot boot or run under TDX.
 	  TDX includes memory encryption and integrity capabilities
 	  which protect the confidentiality and integrity of guest
 	  memory contents and CPU state. TDX guests are protected from
