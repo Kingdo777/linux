@@ -400,6 +400,86 @@ cleanup:
 	return ret;
 }
 
+/*
+ * This test creates a memory cgroup and checks that memory.max_usage_in_pages
+ * exists, is readable, reports pages (consistent with memory.peak bytes),
+ * and cannot be written: a write attempt must fail and leave the reported
+ * value unchanged.
+ */
+static int test_memcg_max_usage_in_pages(const char *root)
+{
+	int ret = KSFT_FAIL;
+	long peak_pages, peak_bytes, peak_pages_after;
+	char *memcg;
+	int fd;
+
+	memcg = cg_name(root, "memcg_max_usage_test");
+	if (!memcg)
+		goto cleanup;
+
+	if (cg_create(memcg))
+		goto cleanup;
+
+	/* The file must exist and be readable; a fresh memcg peaks at 0. */
+	peak_pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak_pages != 0)
+		goto cleanup;
+
+	if (cg_run(memcg, alloc_anon_50M_check, NULL))
+		goto cleanup;
+
+	peak_pages = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak_pages <= 0)
+		goto cleanup;
+
+	/*
+	 * A fresh read of memory.peak (no per-fd reset) reports the global
+	 * watermark in bytes; it must match the page count.
+	 */
+	fd = cg_open(memcg, "memory.peak", O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+		goto cleanup;
+
+	peak_bytes = cg_read_long_fd(fd);
+	close(fd);
+	if (peak_bytes <= 0)
+		goto cleanup;
+
+	if (!values_close(peak_bytes, peak_pages * page_size, 1))
+		goto cleanup;
+
+	/*
+	 * Writing must fail: the file has no write permission bit, and the
+	 * kernel returns -EINVAL for files without a write handler. Either
+	 * the open() or the write() failing counts as a rejection.
+	 */
+	fd = cg_open(memcg, "memory.max_usage_in_pages", O_RDWR | O_CLOEXEC);
+	if (fd >= 0) {
+		char buf[] = "0\n";
+
+		if (write(fd, buf, sizeof(buf) - 1) >= 0) {
+			close(fd);
+			goto cleanup;
+		}
+		close(fd);
+	} else if (errno != EACCES) {
+		goto cleanup;
+	}
+
+	/* A failed write must not affect the reported watermark. */
+	peak_pages_after = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak_pages_after != peak_pages)
+		goto cleanup;
+
+	ret = KSFT_PASS;
+
+cleanup:
+	cg_destroy(memcg);
+	free(memcg);
+
+	return ret;
+}
+
 static int alloc_pagecache_50M_noexit(const char *cgroup, void *arg)
 {
 	int fd = (long)arg;
@@ -1771,6 +1851,7 @@ struct memcg_test {
 } tests[] = {
 	T(test_memcg_subtree_control),
 	T(test_memcg_current_peak),
+	T(test_memcg_max_usage_in_pages),
 	T(test_memcg_min),
 	T(test_memcg_low),
 	T(test_memcg_high),
