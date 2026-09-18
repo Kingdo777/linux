@@ -4664,6 +4664,14 @@ static int memory_peak_show(struct seq_file *sf, void *v)
 	return peak_show(sf, v, &memcg->memory);
 }
 
+static u64 memory_max_usage_in_pages_read(struct cgroup_subsys_state *css,
+					  struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return (u64)READ_ONCE(memcg->memory.watermark);
+}
+
 static int peak_open(struct kernfs_open_file *of)
 {
 	struct cgroup_of_peak *ofp = of_peak(of);
@@ -5032,6 +5040,11 @@ static struct cftype memory_files[] = {
 		.release = peak_release,
 		.seq_show = memory_peak_show,
 		.write = memory_peak_write,
+	},
+	{
+		.name = "max_usage_in_pages",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memory_max_usage_in_pages_read,
 	},
 	{
 		.name = "min",

@@ -400,6 +400,149 @@ cleanup:
 	return ret;
 }
 
+/*
+ * This test allocates some anonymous memory in a memory cgroup and checks
+ * that memory.max_usage_in_pages reports the peak in pages, not bytes.
+ */
+static int alloc_anon_10M_check_pages(const char *cgroup, void *arg)
+{
+	size_t size = MB(10);
+	char *buf;
+	long current, peak;
+	int ret = -1;
+
+	buf = alloc_and_populate_anon(size);
+	if (!buf)
+		return -1;
+
+	current = cg_read_long(cgroup, "memory.current");
+	if (current < size)
+		goto cleanup;
+
+	/* Pages, not bytes: the peak must stay far below the byte size. */
+	peak = cg_read_long(cgroup, "memory.max_usage_in_pages");
+	if (peak <= 0 || peak >= MB(10))
+		goto cleanup;
+
+	if (!values_close(peak * page_size, current, 5))
+		goto cleanup;
+
+	ret = 0;
+
+cleanup:
+	free(buf);
+	return ret;
+}
+
+/*
+ * This test verifies that the cgroup v2 memory.max_usage_in_pages file
+ * exists, starts at zero, tracks the historical peak in pages, and
+ * rejects writes (no reset).
+ */
+static int test_memcg_max_usage_in_pages(const char *root)
+{
+	int ret = KSFT_FAIL;
+	long peak;
+	char *memcg;
+
+	memcg = cg_name(root, "memcg_pages_test");
+	if (!memcg)
+		goto cleanup;
+
+	if (cg_create(memcg))
+		goto cleanup;
+
+	/* Nothing allocated yet: the peak must be zero pages. */
+	peak = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak != 0)
+		goto cleanup;
+
+	if (cg_run(memcg, alloc_anon_10M_check_pages, NULL))
+		goto cleanup;
+
+	/* The peak survives the exit of the allocating process. */
+	peak = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak <= 0 || peak >= MB(10))
+		goto cleanup;
+
+	/* Read-only: writes must fail and must not reset the value. */
+	if (!cg_write(memcg, "memory.max_usage_in_pages", "reset"))
+		goto cleanup;
+
+	if (cg_read_long(memcg, "memory.max_usage_in_pages") != peak)
+		goto cleanup;
+
+	ret = KSFT_PASS;
+
+cleanup:
+	cg_destroy(memcg);
+	free(memcg);
+
+	return ret;
+}
+
+/*
+ * This test verifies the cgroup v1 memory.max_usage_in_pages file the
+ * same way: it exists, reports the historical peak in pages, and rejects
+ * writes.  It is skipped when no v1 memory hierarchy is mounted.
+ */
+static int test_memcg_max_usage_in_pages_v1(const char *root)
+{
+	int ret = KSFT_FAIL;
+	long peak;
+	char v1_root[PATH_MAX];
+	char buf[BUF_SIZE];
+	char *memcg = NULL;
+
+	(void)root;
+
+	if (cg_find_controller_root(v1_root, sizeof(v1_root), "memory"))
+		return KSFT_SKIP;
+
+	/*
+	 * cg_find_controller_root() can return the cgroup v2 unified
+	 * mount when no separate v1 memory hierarchy exists.  Probe a
+	 * v1-only file to make sure we found a v1 memory hierarchy.
+	 */
+	if (cg_read(v1_root, "memory.usage_in_bytes", buf, sizeof(buf)))
+		return KSFT_SKIP;
+
+	memcg = cg_name(v1_root, "memcg_pages_test_v1");
+	if (!memcg)
+		goto cleanup;
+
+	if (cg_create(memcg))
+		goto cleanup;
+
+	/* Nothing allocated yet: the peak must be zero pages. */
+	peak = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak != 0)
+		goto cleanup;
+
+	if (cg_run(memcg, alloc_anon, (void *)MB(10)))
+		goto cleanup;
+
+	/* Pages, not bytes: the peak must stay far below the byte size. */
+	peak = cg_read_long(memcg, "memory.max_usage_in_pages");
+	if (peak <= 0 || peak >= MB(10))
+		goto cleanup;
+
+	/* Read-only: writes must fail and must not reset the value. */
+	if (!cg_write(memcg, "memory.max_usage_in_pages", "reset"))
+		goto cleanup;
+
+	if (cg_read_long(memcg, "memory.max_usage_in_pages") != peak)
+		goto cleanup;
+
+	ret = KSFT_PASS;
+
+cleanup:
+	cg_destroy(memcg);
+	free(memcg);
+
+	return ret;
+}
+
 static int alloc_pagecache_50M_noexit(const char *cgroup, void *arg)
 {
 	int fd = (long)arg;
@@ -1771,6 +1914,8 @@ struct memcg_test {
 } tests[] = {
 	T(test_memcg_subtree_control),
 	T(test_memcg_current_peak),
+	T(test_memcg_max_usage_in_pages),
+	T(test_memcg_max_usage_in_pages_v1),
 	T(test_memcg_min),
 	T(test_memcg_low),
 	T(test_memcg_high),
